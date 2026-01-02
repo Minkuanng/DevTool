@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Auto Redeem Code Pro
 // @namespace    http://tampermonkey.net/
-// @version      1.5.1
-// @description  Auto redeem code với tính năng xoá mã tự động sau 5s khi lỗi
+// @version      1.6.0
+// @description  Auto redeem code với tính năng retry khi hết lượt
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -173,11 +173,18 @@
                     0%, 100% { opacity: 1; }
                     50% { opacity: 0.7; }
                 }
+                @keyframes pulseRetry {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
                 .rainbow-border {
                     animation: rainbowBorder 2s linear infinite;
                 }
                 .warning-pulse {
                     animation: pulseWarning 1s infinite;
+                }
+                .retry-pulse {
+                    animation: pulseRetry 1.25s infinite;
                 }
             `;
             document.head.appendChild(style);
@@ -387,6 +394,7 @@
                 startTusDisplay.textContent = "• Ready";
                 startTusDisplay.style.color = "#39FF14";
                 startTusDisplay.classList.remove('warning-pulse');
+                startTusDisplay.classList.remove('retry-pulse');
                 
                 title.textContent = "🔑 AUTO REDEEM";
                 
@@ -406,7 +414,8 @@
         // Biến kiểm soát
         let isRunning = false;
         let intervalId = null;
-        const SPAM_INTERVAL = 1250;
+        let retryCount = 0;
+        const SPAM_INTERVAL = 1250; // 1.25 giây
         const RESET_DELAY = 5000; // 5 giây
         
         // Hàm dịch
@@ -452,6 +461,7 @@
             
             // Reset trạng thái
             isRunning = false;
+            retryCount = 0;
             
             // Reset nút
             if (actionBtn) {
@@ -523,7 +533,7 @@
         };
         
         // Hàm cập nhật Start Tus
-        const updateStartTus = (message, color = "#39FF14", mainColor = null, isWarning = false) => {
+        const updateStartTus = (message, color = "#39FF14", mainColor = null, isWarning = false, isRetry = false) => {
             startTusDisplay.textContent = message;
             startTusDisplay.style.color = color;
             
@@ -531,6 +541,12 @@
                 startTusDisplay.classList.add('warning-pulse');
             } else {
                 startTusDisplay.classList.remove('warning-pulse');
+            }
+            
+            if (isRetry) {
+                startTusDisplay.classList.add('retry-pulse');
+            } else {
+                startTusDisplay.classList.remove('retry-pulse');
             }
             
             if (mainColor) {
@@ -557,6 +573,7 @@
                 changeMainColor(null);
                 title.textContent = "🔑 AUTO REDEEM";
                 updateStartTus("• Ready", "#39FF14", null);
+                retryCount = 0;
             }
         };
         
@@ -596,7 +613,7 @@
                     return false;
                 }
                 
-                updateStartTus("⏳ Đang xử lý...", "#FFAA00", "yellow");
+                updateStartTus(`⏳ Đang thử... (${retryCount})`, "#FFAA00", "yellow");
                 
                 const params = {
                     cuid,
@@ -606,7 +623,7 @@
                     userId: userId
                 };
                 
-                console.log('📤 Gửi request với mã:', code.substring(0, 4) + '...');
+                console.log(`📤 [${retryCount}] Gửi request với mã:`, code.substring(0, 4) + '...');
                 
                 const response = await fetch("https://api.vipplayer.net/cpCgw/mkt/redeem_code/exchange", {
                     method: "POST",
@@ -618,10 +635,10 @@
                     body: toQueryString(params)
                 });
                 
-                console.log('📥 Response status:', response.status);
+                console.log(`📥 [${retryCount}] Response status:`, response.status);
                 
                 const data = await response.json();
-                console.log('📥 Response data:', data);
+                console.log(`📥 [${retryCount}] Response data:`, data);
                 
                 if (data.data?.successList?.length > 0) {
                     updateStartTus("✅ Thành công!", "#00FF00", "green");
@@ -637,8 +654,24 @@
                 let shouldReset = true;
                 let mainColor = "red";
                 let icon = "❌";
+                let continueRetry = false; // Mới: cờ để tiếp tục retry
                 
-                if (message.includes("đã nhận") || message.includes("đã sử dụng")) {
+                // KIỂM TRA CÁC LỖI CẦN TIẾP TỤC RETRY
+                if (message.includes("hết lượt") || 
+                    message.includes("đã được bán hết") || 
+                    message.includes("sold out") ||
+                    message.includes("hết số lượng") ||
+                    message.includes("không đủ số lượng")) {
+                    // Lỗi hết lượt: TIẾP TỤC RETRY sau 1.25s
+                    shouldStopSpam = false; // KHÔNG dừng spam
+                    shouldReset = false; // KHÔNG reset
+                    continueRetry = true; // Tiếp tục retry
+                    retryCount++;
+                    mainColor = "blue";
+                    icon = "🔄";
+                    updateStartTus(`${icon} ${translated} (Thử lại: ${retryCount})`, "#FFAA00", mainColor, false, true);
+                }
+                else if (message.includes("đã nhận") || message.includes("đã sử dụng")) {
                     // Mã đã sử dụng: DỪNG SPAM, reset sau 5s
                     shouldStopSpam = true;
                     shouldReset = true;
@@ -686,9 +719,11 @@
                 }
                 
                 // Lập lịch reset nếu cần
-                if (shouldReset) {
+                if (shouldReset && !continueRetry) {
                     scheduleResetAll(input, actionBtn, startTusDisplay, title, mainUI, RESET_DELAY);
                 }
+                
+                return continueRetry; // Trả về true nếu cần tiếp tục retry
                 
             } catch (error) {
                 console.error('❌ Lỗi gửi request:', error);
@@ -739,7 +774,7 @@
                 const success = await sendRequest();
                 if (success) return;
                 
-                // Bắt đầu spam nếu không có lỗi nghiêm trọng
+                // Bắt đầu spam với interval 1.25s
                 if (isRunning) {
                     intervalId = setInterval(async () => {
                         if (!isRunning) return;
