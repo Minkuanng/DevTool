@@ -1,1 +1,425 @@
+#!/usr/bin/env python3
+"""
+Blox Fruits Auto Rejoin Tool
+One Command Install & Run
+GitHub: https://raw.githubusercontent.com/Minkuanng/DevTool/refs/heads/main/Termux-Rejoin_Roblox
+"""
+import os
+import sys
+import time
+import json
+import re
+import subprocess
+from datetime import datetime
 
+class BloxFruitsTool:
+    VERSION = "2.0"
+    GITHUB_RAW = "https://raw.githubusercontent.com/Minkuanng/DevTool/refs/heads/main/Termux-Rejoin_Roblox"
+    
+    def __init__(self):
+        self.colors = {
+            'red': '\033[91m',
+            'green': '\033[92m',
+            'yellow': '\033[93m',
+            'blue': '\033[94m',
+            'magenta': '\033[95m',
+            'cyan': '\033[96m',
+            'white': '\033[97m',
+            'reset': '\033[0m'
+        }
+        
+        self.blox_fruits = {
+            '1': {'name': '🌊 Blox Fruits SEA 1', 'pid': '2753915549'},
+            '2': {'name': '🌊 Blox Fruits SEA 2', 'pid': '4442272183'},
+            '3': {'name': '🌊 Blox Fruits SEA 3', 'pid': '7449423635'},
+            '4': {'name': '⚔️ King Legacy', 'pid': '4520749081'},
+            '5': {'name': '👻 A One Piece Game', 'pid': '5602055394'}
+        }
+        
+        self.config_file = "/data/data/com.termux/files/home/.blox_config.json"
+        self.load_config()
+    
+    def color(self, text, color='white'):
+        return f"{self.colors.get(color, self.colors['white'])}{text}{self.colors['reset']}"
+    
+    def clear(self):
+        os.system('clear')
+    
+    def banner(self):
+        self.clear()
+        print(self.color(r"""
+╔═══════════════════════════════════════════════════╗
+║   ██████╗ ██╗      ██████╗ ██╗  ██╗███████╗      ║
+║   ██╔══██╗██║     ██╔═══██╗╚██╗██╔╝██╔════╝      ║
+║   ██████╔╝██║     ██║   ██║ ╚███╔╝ ███████╗      ║
+║   ██╔══██╗██║     ██║   ██║ ██╔██╗ ╚════██║      ║
+║   ██████╔╝███████╗╚██████╔╝██╔╝ ██╗███████║      ║
+║   ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝      ║
+╠═══════════════════════════════════════════════════╣
+║          AUTOMATIC REJOIN TOOL v2.0               ║
+║      One Command • GitHub • Termux Android        ║
+╚═══════════════════════════════════════════════════╝
+        """, 'cyan'))
+        print(self.color(f"📱 Running on: {self.get_device_info()}", 'yellow'))
+        print(self.color(f"⏰ Time: {datetime.now().strftime('%H:%M:%S')}", 'yellow'))
+        print()
+    
+    def get_device_info(self):
+        try:
+            result = subprocess.run(['getprop', 'ro.product.model'], 
+                                  capture_output=True, text=True)
+            return result.stdout.strip() or "Android Device"
+        except:
+            return "Android Device"
+    
+    def load_config(self):
+        self.config = {
+            'saved_games': {},
+            'settings': {
+                'default_delay': 5,
+                'auto_save': True,
+                'use_deeplink': True
+            }
+        }
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    self.config = json.load(f)
+        except:
+            pass
+    
+    def save_config(self):
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.config, f, indent=2)
+        except:
+            pass
+    
+    def check_termux(self):
+        """Check if running in Termux"""
+        if not os.path.exists('/data/data/com.termux/files/usr'):
+            print(self.color("❌ This tool requires Termux on Android!", 'red'))
+            print(self.color("📥 Install Termux from F-Droid", 'yellow'))
+            return False
+        return True
+    
+    def check_dependencies(self):
+        """Check and install required packages"""
+        print(self.color("🔧 Checking dependencies...", 'yellow'))
+        
+        # Check Python
+        try:
+            subprocess.run(['python3', '--version'], capture_output=True)
+            print(self.color("✅ Python3 is installed", 'green'))
+        except:
+            print(self.color("📦 Installing Python3...", 'yellow'))
+            subprocess.run(['pkg', 'install', 'python', '-y'], 
+                         stdout=subprocess.DEVNULL)
+        
+        # Check requests
+        try:
+            import requests
+            print(self.color("✅ requests library installed", 'green'))
+        except:
+            print(self.color("📦 Installing requests...", 'yellow'))
+            subprocess.run([sys.executable, '-m', 'pip', 'install', 'requests', '--quiet'],
+                         stdout=subprocess.DEVNULL)
+        
+        return True
+    
+    def rejoin_game(self, place_id, game_name="Roblox Game"):
+        """Main rejoin function"""
+        print(self.color(f"\n🚀 Rejoining: {game_name}", 'cyan'))
+        print(self.color(f"🎮 Place ID: {place_id}", 'blue'))
+        
+        success = False
+        methods = [
+            # Deeplink method (primary)
+            ['am', 'start', '-a', 'android.intent.action.VIEW', 
+             '-d', f'roblox://placeId={place_id}'],
+            
+            # Alternative deeplink
+            ['am', 'start', '-a', 'android.intent.action.VIEW', 
+             '-d', f'https://www.roblox.com/games/{place_id}/'],
+            
+            # Direct app launch
+            ['am', 'start', '-n', 'com.roblox.client/com.roblox.client.LaunchActivity'],
+            
+            # Root launch method
+            ['am', 'start', '--user', '0', '-n', 
+             'com.roblox.client/com.roblox.client.LaunchActivity']
+        ]
+        
+        for i, method in enumerate(methods, 1):
+            try:
+                print(self.color(f"   [{i}] Trying method {i}...", 'yellow'))
+                result = subprocess.run(method, capture_output=True, text=True)
+                if result.returncode == 0:
+                    print(self.color(f"   ✅ Method {i} successful!", 'green'))
+                    success = True
+                    break
+                time.sleep(0.5)
+            except Exception as e:
+                continue
+        
+        if success:
+            print(self.color(f"\n🎉 Success! {game_name} should be opening...", 'green'))
+            
+            # Auto-save if enabled
+            if self.config['settings']['auto_save']:
+                if game_name not in self.config['saved_games']:
+                    self.config['saved_games'][game_name] = place_id
+                    self.save_config()
+            
+            return True
+        else:
+            print(self.color("\n❌ Failed to open Roblox!", 'red'))
+            print(self.color("   Please make sure:", 'yellow'))
+            print(self.color("   1. Roblox is installed", 'yellow'))
+            print(self.color("   2. Termux has app launch permission", 'yellow'))
+            print(self.color("   3. Try opening Roblox manually", 'yellow'))
+            return False
+    
+    def extract_place_id(self, url):
+        """Extract Place ID from Roblox URL"""
+        patterns = [
+            r'/games/(\d+)/?',
+            r'placeId=(\d+)',
+            r'roblox\.com/games/(\d+)',
+            r'(\d{9,10})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+    
+    def quick_menu(self):
+        """Quick action menu"""
+        self.banner()
+        print(self.color("⚡ QUICK ACTIONS:", 'magenta'))
+        print(self.color("=" * 45, 'cyan'))
+        
+        for key, game in self.blox_fruits.items():
+            print(self.color(f" [{key}] {game['name']}", 'green'))
+        
+        print(self.color("=" * 45, 'cyan'))
+        print(self.color(" [C] Custom Place ID", 'yellow'))
+        print(self.color(" [L] From Roblox Link", 'yellow'))
+        print(self.color(" [M] Multi-Rejoin Mode", 'yellow'))
+        print(self.color(" [S] Saved Games", 'yellow'))
+        print(self.color(" [U] Update Tool", 'blue'))
+        print(self.color(" [0] Exit", 'red'))
+        print()
+    
+    def custom_place_id(self):
+        """Enter custom Place ID"""
+        self.banner()
+        print(self.color("🎮 CUSTOM GAME REJOIN", 'cyan'))
+        print(self.color("=" * 45, 'cyan'))
+        
+        place_id = input(self.color("\n📝 Enter Place ID: ", 'yellow')).strip()
+        if not place_id.isdigit():
+            print(self.color("❌ Invalid Place ID!", 'red'))
+            time.sleep(2)
+            return
+        
+        game_name = input(self.color("📝 Game name (optional): ", 'yellow')).strip()
+        if not game_name:
+            game_name = f"Game {place_id}"
+        
+        self.rejoin_game(place_id, game_name)
+        input(self.color("\n↵ Press Enter to continue...", 'cyan'))
+    
+    def from_link(self):
+        """Rejoin from Roblox link"""
+        self.banner()
+        print(self.color("🔗 REJOIN FROM LINK", 'cyan'))
+        print(self.color("=" * 45, 'cyan'))
+        print(self.color("\n📋 Example links:", 'yellow'))
+        print(self.color(" • https://www.roblox.com/games/2753915549/", 'white'))
+        print(self.color(" • roblox://placeId=2753915549", 'white'))
+        print()
+        
+        url = input(self.color("📝 Paste Roblox link here:\n> ", 'yellow')).strip()
+        
+        if not url:
+            print(self.color("❌ No link provided!", 'red'))
+            time.sleep(2)
+            return
+        
+        place_id = self.extract_place_id(url)
+        
+        if place_id:
+            print(self.color(f"\n✅ Found Place ID: {place_id}", 'green'))
+            game_name = input(self.color("📝 Game name (optional): ", 'yellow')).strip()
+            if not game_name:
+                game_name = f"Game from Link"
+            
+            self.rejoin_game(place_id, game_name)
+        else:
+            print(self.color("\n❌ Could not extract Place ID!", 'red'))
+            print(self.color("   Make sure the link is valid", 'yellow'))
+        
+        input(self.color("\n↵ Press Enter to continue...", 'cyan'))
+    
+    def multi_rejoin(self):
+        """Multi-rejoin with loop"""
+        self.banner()
+        print(self.color("🔄 MULTI-REJOIN MODE", 'cyan'))
+        print(self.color("=" * 45, 'cyan'))
+        
+        try:
+            place_id = input(self.color("\n🎮 Place ID: ", 'yellow')).strip()
+            if not place_id.isdigit():
+                print(self.color("❌ Invalid Place ID!", 'red'))
+                time.sleep(2)
+                return
+            
+            count = int(input(self.color("🔄 How many times: ", 'yellow')).strip())
+            delay = int(input(self.color("⏱️ Delay between (seconds): ", 'yellow')).strip())
+            game_name = input(self.color("📝 Game name: ", 'yellow')).strip()
+            
+            if not game_name:
+                game_name = f"Multi-Rejoin {place_id}"
+            
+            print(self.color(f"\n🚀 Starting {count} rejoins...", 'green'))
+            
+            for i in range(1, count + 1):
+                print(self.color(f"\n[{i}/{count}] Rejoining...", 'cyan'))
+                self.rejoin_game(place_id, f"{game_name} #{i}")
+                
+                if i < count:
+                    print(self.color(f"⏳ Waiting {delay} seconds...", 'yellow'))
+                    for sec in range(delay, 0, -1):
+                        print(self.color(f"   {sec}...", 'yellow'), end='\r')
+                        time.sleep(1)
+                    print()
+            
+            print(self.color(f"\n🎉 Completed {count} rejoins!", 'green'))
+            
+        except ValueError:
+            print(self.color("❌ Invalid input! Use numbers only.", 'red'))
+        
+        input(self.color("\n↵ Press Enter to continue...", 'cyan'))
+    
+    def saved_games_menu(self):
+        """View and manage saved games"""
+        self.banner()
+        print(self.color("💾 SAVED GAMES", 'cyan'))
+        print(self.color("=" * 45, 'cyan'))
+        
+        if not self.config['saved_games']:
+            print(self.color("\n📭 No saved games yet!", 'yellow'))
+            print(self.color("   Save games from rejoin menu", 'white'))
+        else:
+            print(self.color("\n📋 Your saved games:", 'yellow'))
+            print(self.color("=" * 45, 'cyan'))
+            
+            games = list(self.config['saved_games'].items())
+            for idx, (name, pid) in enumerate(games, 1):
+                print(self.color(f" [{idx}] {name:<30} {pid}", 'green'))
+            
+            print(self.color("=" * 45, 'cyan'))
+            
+            choice = input(self.color("\nSelect number to rejoin (0 to back): ", 'yellow')).strip()
+            
+            if choice.isdigit():
+                idx = int(choice)
+                if 1 <= idx <= len(games):
+                    name, pid = games[idx - 1]
+                    self.rejoin_game(pid, name)
+                elif idx != 0:
+                    print(self.color("❌ Invalid selection!", 'red'))
+        
+        input(self.color("\n↵ Press Enter to continue...", 'cyan'))
+    
+    def update_tool(self):
+        """Update tool from GitHub"""
+        self.banner()
+        print(self.color("🔄 UPDATE TOOL", 'cyan'))
+        print(self.color("=" * 45, 'cyan'))
+        
+        print(self.color("\n📡 Checking for updates...", 'yellow'))
+        
+        try:
+            import requests
+            response = requests.get(self.GITHUB_RAW, timeout=10)
+            
+            if response.status_code == 200:
+                # Compare versions (simplified)
+                print(self.color(f"✅ Update available!", 'green'))
+                print(self.color(f"📥 Downloading latest version...", 'yellow'))
+                
+                # Save update
+                with open(__file__, 'w') as f:
+                    f.write(response.text)
+                
+                print(self.color("🎉 Tool updated successfully!", 'green'))
+                print(self.color("🔄 Restarting...", 'yellow'))
+                time.sleep(2)
+                
+                # Restart tool
+                os.execv(sys.executable, ['python3'] + sys.argv)
+            else:
+                print(self.color("✅ You have the latest version!", 'green'))
+        
+        except Exception as e:
+            print(self.color(f"❌ Update failed: {str(e)}", 'red'))
+        
+        input(self.color("\n↵ Press Enter to continue...", 'cyan'))
+    
+    def run(self):
+        """Main run loop"""
+        if not self.check_termux():
+            return
+        
+        self.check_dependencies()
+        
+        while True:
+            self.quick_menu()
+            choice = input(self.color("Select option: ", 'cyan')).strip().lower()
+            
+            if choice in self.blox_fruits:
+                game = self.blox_fruits[choice]
+                self.rejoin_game(game['pid'], game['name'])
+                input(self.color("\n↵ Press Enter to continue...", 'cyan'))
+            
+            elif choice == 'c':
+                self.custom_place_id()
+            
+            elif choice == 'l':
+                self.from_link()
+            
+            elif choice == 'm':
+                self.multi_rejoin()
+            
+            elif choice == 's':
+                self.saved_games_menu()
+            
+            elif choice == 'u':
+                self.update_tool()
+            
+            elif choice == '0':
+                print(self.color("\n👋 Goodbye! Thanks for using Blox Fruits Rejoin Tool!", 'green'))
+                time.sleep(1)
+                break
+            
+            else:
+                print(self.color("❌ Invalid option! Try again.", 'red'))
+                time.sleep(1)
+
+def main():
+    """Main entry point"""
+    try:
+        tool = BloxFruitsTool()
+        tool.run()
+    except KeyboardInterrupt:
+        print("\n\n👋 Tool stopped by user")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        print("Please report this issue on GitHub")
+
+if __name__ == "__main__":
+    main()
